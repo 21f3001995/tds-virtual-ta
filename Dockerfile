@@ -1,29 +1,33 @@
-FROM python:3.9-slim
+# Use a slim Python base image
+FROM python:3.10-slim
 
-# System dependencies including Tesseract
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    libglib2.0-0 \
-    libsm6 \
-    libxrender1 \
-    libxext6 \
- && rm -rf /var/lib/apt/lists/*
-
-# Create a non-root user
-RUN useradd -m -u 1000 user
-USER user
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
-ENV PATH="/home/user/.local/bin:$PATH"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY --chown=user requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
-COPY --chown=user . .
+# Copy application code
+COPY . .
 
-# Use the port Render expects (default is 10000, but use env variable)
-ENV PORT=7860
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Expose port (Render uses PORT env variable)
+ENV PORT=10000
+
+# Start FastAPI app with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
