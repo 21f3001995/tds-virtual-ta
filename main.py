@@ -109,3 +109,7 @@ async def handle_query(request: Request):
     gc.collect()
 
     return Answer(answer=answer.strip(), links=links[:2])
+
+@app.post("/", response_model=Answer)
+async def alias_for_api(request: Request):
+    return await handle_query(request)
