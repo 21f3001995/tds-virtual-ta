@@ -1,0 +1,27 @@
+providers:
+  - id: local-ta
+    label: "Local Virtual TA"
+    # DO NOT specify type/url here in this version
+    # We'll attach them inside 'prompts'
+
+prompts:
+  - id: local-ta-prompt
+    provider: local-ta
+    label: "Ask TA"
+    raw: |
+      {
+        "question": "{{ question }}"
+      }
+
+tests:
+  - vars:
+      question: "What is gradient descent?"
+    assert:
+      - type: includes
+        value: "gradient"
+
+providers.http:
+  local-ta:
+    url: http://127.0.0.1:8000/api/
+    headers:
+      content-type: application/json
