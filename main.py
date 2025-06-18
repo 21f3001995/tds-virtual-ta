@@ -4,7 +4,7 @@ from typing import List
 import base64, io, pickle, numpy as np
 from PIL import Image
 import pytesseract, json, gc
-
+from json import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import faiss
 
@@ -39,10 +39,11 @@ class Answer(BaseModel):
     answer: str
     links: List[Link]
 
-@app.get("/")
-def home():
-    return {"message": "✅ TDS Virtual TA is live. POST /api with {\"question\": \"...\"}"}
-
+@app.api_route("/", methods=["GET", "HEAD", "OPTIONS"])
+async def root(request: Request):
+    if request.method == "HEAD":
+        return JSONResponse(status_code=200, content={})
+    return {"message": "✅ TDS Virtual TA is live. POST to /api/ with {'question': '...'}"}
 
 @app.post("/api", response_model=Answer)
 async def handle_query(request: Request):
@@ -51,7 +52,7 @@ async def handle_query(request: Request):
     # Load everything lazily
     if bi_encoder is None:
         from sentence_transformers import SentenceTransformer
-        bi_encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        bi_encoder = SentenceTransformer("paraphrase-MiniLM-L3-v2")
 
     if reranker is None:
         from sentence_transformers import CrossEncoder
@@ -106,6 +107,3 @@ async def handle_query(request: Request):
 
     return Answer(answer=answer.strip(), links=links[:2])
 
-@app.post("/", response_model=Answer)
-async def alias_for_api(request: Request):
-    return await handle_query(request)
