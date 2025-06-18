@@ -4,7 +4,7 @@ from typing import List
 import base64, io, pickle, numpy as np
 from PIL import Image
 import pytesseract, json, gc
-from json import JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import faiss
 
