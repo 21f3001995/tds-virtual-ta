@@ -22,14 +22,6 @@ def get_reranker():
     return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-4-v2")
 
 
-# pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
-"""
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not set")
-"""
-
 app = FastAPI()
 
 bi_encoder = get_bi_encoder()
