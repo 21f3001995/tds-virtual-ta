@@ -114,3 +114,7 @@ async def answer_query(request: Request):
             links.append(Link(url=c["url"], text=c.get("title", "Source")))
 
     return Answer(answer=answer.strip(), links=links[:3])
+
+@app.post("/", response_model=Answer)
+async def answer_root_passthrough(request: Request):
+    return await answer_query(request)
