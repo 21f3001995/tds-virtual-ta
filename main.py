@@ -48,6 +48,13 @@ def extract_text_from_image(base64_image: str) -> str:
         print("OCR Error:", e)
         return ""
 
+@app.get("/")
+def home():
+    return {
+        "message": "✅ TDS Virtual TA is live. Use POST /api/ with a JSON body like {\"question\": \"...\"}"
+    }
+
+
 @app.post("/api/", response_model=Answer)
 async def answer_query(request: Request):
     global bi_encoder, reranker, faiss_index, metadata
