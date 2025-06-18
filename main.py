@@ -1,14 +1,11 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List
 import base64, io, pickle, gc
 import numpy as np
-from PIL import Image
-import pytesseract
 import faiss
-from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
@@ -20,11 +17,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Preload everything (safer than lazy under Render)
-bi_encoder = SentenceTransformer("all-MiniLM-L6-v2")
-faiss_index = faiss.read_index("vector_index/faiss.index")
-with open("vector_index/metadata.pkl", "rb") as f:
-    metadata = pickle.load(f)
+bi_encoder = None
+faiss_index = None
+metadata = None
 
 class Link(BaseModel):
     url: str
@@ -34,13 +29,6 @@ class Answer(BaseModel):
     answer: str
     links: List[Link]
 
-def extract_text_from_image(b64_img: str) -> str:
-    try:
-        image = Image.open(io.BytesIO(base64.b64decode(b64_img))).convert("RGB")
-        return pytesseract.image_to_string(image).strip()
-    except:
-        return ""
-
 @app.api_route("/", methods=["GET", "HEAD", "OPTIONS"])
 async def root(request: Request):
     if request.method == "HEAD":
@@ -49,21 +37,30 @@ async def root(request: Request):
 
 @app.post("/api", response_model=Answer)
 async def handle_query(request: Request):
+    global bi_encoder, faiss_index, metadata
+
     try:
         data = await request.json()
     except:
-        return {"answer": "Invalid JSON format", "links": []}
+        return {"answer": "Invalid request format", "links": []}
 
     question = data.get("question", "").strip()
-    if not question and data.get("image"):
-        question = extract_text_from_image(data["image"])
-    elif data.get("image"):
-        question += "\n" + extract_text_from_image(data["image"])
 
     if not question:
-        return {"answer": "No valid question provided.", "links": []}
+        return {"answer": "No question provided.", "links": []}
 
-    # Encode and search
+    if bi_encoder is None:
+        from sentence_transformers import SentenceTransformer
+        bi_encoder = SentenceTransformer("paraphrase-MiniLM-L3-v2")  # ~40% smaller
+
+    if faiss_index is None:
+        faiss_index = faiss.read_index("vector_index/faiss.index")
+
+    if metadata is None:
+        with open("vector_index/metadata.pkl", "rb") as f:
+            metadata = pickle.load(f)
+
+    # Search
     emb = bi_encoder.encode([question])[0].astype("float32")
     _, I = faiss_index.search(np.array([emb]), k=3)
     top_chunks = [metadata[i] for i in I[0] if i < len(metadata)]
@@ -71,11 +68,10 @@ async def handle_query(request: Request):
     if not top_chunks:
         return {"answer": "No relevant content found.", "links": []}
 
-    # Basic scoring: top 2
-    ranked = top_chunks[:2]
-    answer = "Based on the content, here's what I found:\n"
+    # Prepare response
+    answer = "Here's what I found:\n"
     links = []
-    for c in ranked:
+    for c in top_chunks[:2]:
         snippet = c["text"][:300].replace("\n", " ").strip()
         answer += f"- {snippet}...\n"
         if c.get("url"):
