@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request
-from pydantic import BaseModel
-from typing import List
-import base64, io, pickle, numpy as np
-from PIL import Image
-import pytesseract, json, gc
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List
+import base64, io, pickle, gc
+import numpy as np
+from PIL import Image
+import pytesseract
 import faiss
 
 app = FastAPI()
@@ -18,19 +19,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Lazy load models
+# Globals
 bi_encoder = None
 reranker = None
 faiss_index = None
 metadata = None
 
-def extract_text_from_image(base64_image: str) -> str:
-    try:
-        image = Image.open(io.BytesIO(base64.b64decode(base64_image))).convert("RGB")
-        return pytesseract.image_to_string(image).strip()
-    except Exception:
-        return ""
-
+# Models
 class Link(BaseModel):
     url: str
     text: str
@@ -39,20 +34,30 @@ class Answer(BaseModel):
     answer: str
     links: List[Link]
 
+# OCR
+def extract_text_from_image(b64_img: str) -> str:
+    try:
+        image = Image.open(io.BytesIO(base64.b64decode(b64_img))).convert("RGB")
+        return pytesseract.image_to_string(image).strip()
+    except:
+        return ""
+
+# Health & root
 @app.api_route("/", methods=["GET", "HEAD", "OPTIONS"])
 async def root(request: Request):
     if request.method == "HEAD":
         return JSONResponse(status_code=200, content={})
-    return {"message": "✅ TDS Virtual TA is live. POST to /api/ with {'question': '...'}"}
+    return {"message": "✅ TDS Virtual TA is live. POST to /api with {'question': '...'}"}
 
+# API endpoint
 @app.post("/api", response_model=Answer)
 async def handle_query(request: Request):
     global bi_encoder, reranker, faiss_index, metadata
 
-    # Load everything lazily
+    # Lazy load
     if bi_encoder is None:
         from sentence_transformers import SentenceTransformer
-        bi_encoder = SentenceTransformer("paraphrase-MiniLM-L3-v2")
+        bi_encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
     if reranker is None:
         from sentence_transformers import CrossEncoder
@@ -63,27 +68,26 @@ async def handle_query(request: Request):
         with open("vector_index/metadata.pkl", "rb") as f:
             metadata = pickle.load(f)
 
-    # Read input
+    # Parse request
     try:
         data = await request.json()
     except:
-        return {"answer": "Invalid request format", "links": []}
+        return {"answer": "Invalid JSON format", "links": []}
 
     question = data.get("question", "").strip()
     if not question and data.get("image"):
         question = extract_text_from_image(data["image"])
-
     elif data.get("image"):
         question += "\n" + extract_text_from_image(data["image"])
 
     if not question:
         return {"answer": "No valid question provided.", "links": []}
 
-    # Encode and search
+    # Embed + Search
     emb = bi_encoder.encode([question])[0].astype("float32")
     _, I = faiss_index.search(np.array([emb]), k=3)
-
     top_chunks = [metadata[i] for i in I[0] if i < len(metadata)]
+
     if not top_chunks:
         return {"answer": "No relevant content found.", "links": []}
 
@@ -92,7 +96,7 @@ async def handle_query(request: Request):
     scores = reranker.predict(pairs)
     ranked = [c for _, c in sorted(zip(scores, top_chunks), key=lambda x: -x[0])][:2]
 
-    # Prepare response
+    # Build response
     answer = "Based on the content, here's what I found:\n"
     links = []
     for c in ranked:
@@ -101,9 +105,7 @@ async def handle_query(request: Request):
         if c.get("url"):
             links.append(Link(url=c["url"], text=c.get("title", "Source")))
 
-    # Free temp memory
     del emb, I, top_chunks, pairs, scores
     gc.collect()
 
     return Answer(answer=answer.strip(), links=links[:2])
-
