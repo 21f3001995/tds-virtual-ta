@@ -8,13 +8,13 @@ from sentence_transformers import SentenceTransformer, CrossEncoder
 import pytesseract, os
 from dotenv import load_dotenv
 import json
-
+"""
 pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set")
-
+"""
 app = FastAPI()
 
 bi_encoder = SentenceTransformer("all-MiniLM-L6-v2")
@@ -72,7 +72,7 @@ async def answer_query(request: Request):
     ranked_chunks = [c for _, c in sorted(zip(rerank_scores, top_chunks), key=lambda x: -x[0])]
     relevant = ranked_chunks[:3]
 
-    answer = "Based on the content, here's what I found relevant:\n\n"
+    answer = "Based on the content, here's what I found relevant: "
     links = []
     for c in relevant:
         snippet = c["text"][:300].replace("\n", " ").strip()
