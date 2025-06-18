@@ -6,23 +6,44 @@ from PIL import Image
 import faiss
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import pytesseract, os
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 import json
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+from functools import lru_cache
+
+@lru_cache()
+def get_bi_encoder():
+    from sentence_transformers import SentenceTransformer
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+@lru_cache()
+def get_reranker():
+    from sentence_transformers import CrossEncoder
+    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-4-v2")
+
+
+# pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+"""
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY not set")
+"""
 
 app = FastAPI()
 
-bi_encoder = SentenceTransformer("all-MiniLM-L6-v2")
-reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-faiss_index = faiss.read_index("vector_index/faiss.index")
+bi_encoder = get_bi_encoder()
+reranker = get_reranker()
 
-with open("vector_index/metadata.pkl", "rb") as f:
-    metadata = pickle.load(f)
+@lru_cache()
+def load_faiss_and_metadata():
+    import faiss, pickle
+    index = faiss.read_index("vector_index/faiss.index")
+    with open("vector_index/metadata.pkl", "rb") as f:
+        meta = pickle.load(f)
+    return index, meta
+
+faiss_index, metadata = load_faiss_and_metadata()
 
 class Link(BaseModel):
     url: str
@@ -65,7 +86,7 @@ async def answer_query(request: Request):
         return {"answer": "No valid question provided.", "links": []}
 
     embedding = bi_encoder.encode([question])[0].astype("float32")
-    D, I = faiss_index.search(np.array([embedding]), k=10)
+    D, I = faiss_index.search(np.array([embedding]), k=5)
     top_chunks = [metadata[i] for i in I[0] if i < len(metadata)]
 
     rerank_scores = reranker.predict([(question, c["text"]) for c in top_chunks])

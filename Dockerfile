@@ -31,3 +31,4 @@ ENV PORT=10000
 
 # Start FastAPI app with uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+

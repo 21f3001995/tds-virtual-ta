@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: tds-virtual-ta
+    runtime: docker
+    repo: https://github.com/21f3001995/tds-virtual-ta
+    plan: free
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DISCOURSE_COOKIE
+        sync: false
